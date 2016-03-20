@@ -13,8 +13,8 @@
 #define MAX_CARD_HAND 11      // 11 cards max. that each player can hold
 #define CARD_WIDTH 67         // card width
 #define CARD_HEIGHT 97        // card height
-#define WINDOW_POSX 500       // initial position of the window: x
-#define WINDOW_POSY 250       // initial position of the window: y
+#define WINDOW_POSX 200      // initial position of the window: x
+#define WINDOW_POSY 100       // initial position of the window: y
 #define EXTRASPACE 150
 #define MARGIN 5
 #define MAX_PLAYERS 4         // number of maximum players
@@ -35,8 +35,8 @@ void LoadCards(SDL_Surface **);
 void UnLoadCards(SDL_Surface **);
 
 // definition of some strings: they cannot be changed when the program is executed !
-const char myName[] = "Prof. Joao Ascenso";
-const char myNumber[] = "IST11111";
+const char myName[] = "André Agostinho";
+const char myNumber[] = "IST425301";
 const char * playerNames[] = {"Player 1", "Player 2", "Player 3", "Player 4"};
 
 /**
@@ -45,6 +45,7 @@ const char * playerNames[] = {"Player 1", "Player 2", "Player 3", "Player 4"};
  */
 int main( int argc, char* args[] )
 {
+    //
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     TTF_Font *serif = NULL;
@@ -66,6 +67,8 @@ int main( int argc, char* args[] )
     // put down some cards just for testing purposes: for you to remove !
     player_cards[0][0] = 0;
     player_cards[0][1] = 15;
+    
+    player_cards[0][4] = 33;
     player_cards[1][0] = 10;
     player_cards[1][1] = 34;
     player_cards[1][2] = 0;
@@ -75,23 +78,24 @@ int main( int argc, char* args[] )
     player_cards[2][1] = 0;
     player_cards[3][0] = 15;
     player_cards[3][1] = 10;
-    pos_player_hand[0] = 2;
+    pos_player_hand[0] = 5;
     pos_player_hand[1] = 5;
     pos_player_hand[2] = 2;
     pos_player_hand[3] = 2;
 
-    house_cards[0] = 0;
+    house_cards[0] = 5;
     house_cards[1] = 12;
-    pos_house_hand = 1;
+    pos_house_hand = 2;
 	
  	while( quit == 0 )
     {
         // while there's events to handle
         while( SDL_PollEvent( &event ) )
         {
+            //Quit the program by pressing the cross
 			if( event.type == SDL_QUIT )
             {
-                // quit the program
+                quit = 1;
             }
 			else if ( event.type == SDL_KEYDOWN )
 			{
@@ -103,6 +107,11 @@ int main( int argc, char* args[] )
 					case SDLK_h:
 						// hit !
                         // todo
+          
+                    //Press 'q' to exit 
+                    case SDLK_q:
+                        quit = 1;
+
 					default:
 						break;
 				}
@@ -131,6 +140,19 @@ int main( int argc, char* args[] )
 	return EXIT_SUCCESS;
 }
 
+/************************************************************************
+ *                                                                      *
+ *                      GAME MECHANICS FUNCTIONS                        *
+ *                                                                      *
+ ************************************************************************/
+
+
+
+/************************************************************************
+ *                                                                      *
+ *                          GRAPHICAL FUNCTIONS                         *
+ *                                                                      *
+ ************************************************************************/
 
 /**
  * RenderTable: Draws the table where the game will be played, namely:
