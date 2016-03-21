@@ -1,3 +1,7 @@
+/**
+ * @file
+ */
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_image.h>
@@ -5,21 +9,29 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
+#include <limits.h>
+
 
 #define STRING_SIZE 100       // max size for some strings
 #define WIDTH_WINDOW 900      // window width
 #define HEIGHT_WINDOW 525     // window height
-#define MAX_DECK_SIZE 52      // number of max cards in the deck
-#define MAX_CARD_HAND 11      // 11 cards max. that each player can hold
 #define CARD_WIDTH 67         // card width
 #define CARD_HEIGHT 97        // card height
-#define WINDOW_POSX 200      // initial position of the window: x
+#define WINDOW_POSX 200       // initial position of the window: x
 #define WINDOW_POSY 100       // initial position of the window: y
 #define EXTRASPACE 150
 #define MARGIN 5
-#define MAX_PLAYERS 4         // number of maximum players
 
-// declaration of the functions related to graphical issues
+#define DECK_SIZE 52      // number of max cards in the deck
+#define MAX_NUM_DECKS 6       // max number of decks
+#define MAX_CARD_HAND 11      // 11 cards max. that each player can hold
+#define MAX_PLAYERS 4         // number of maximum players
+#define MIN_START_MONEY 10    // minimum amount for starting player money
+#define MAX_BET 0.2f           // maximum starting player money fraction that can
+                              // be used as bet
+
+
+// declaration of the functions related to graphical interface
 void InitEverything(int , int , TTF_Font **, SDL_Surface **, SDL_Window ** , SDL_Renderer ** );
 void InitSDL();
 void InitFont();
@@ -34,6 +46,15 @@ void RenderPlayerCards(int [][MAX_CARD_HAND], int [], SDL_Surface **, SDL_Render
 void LoadCards(SDL_Surface **);
 void UnLoadCards(SDL_Surface **);
 
+//function declaration for game mechanics
+void GenerateDecks(int *, int);
+void Shuffle(int *, int);
+
+//utility function declarations
+void GameInit(int *, int *, int *);
+void GetGameParameters(int *, int *, int *);
+int ReadParameter(int , int);
+
 // definition of some strings: they cannot be changed when the program is executed !
 const char myName[] = "André Agostinho";
 const char myNumber[] = "IST425301";
@@ -45,54 +66,69 @@ const char * playerNames[] = {"Player 1", "Player 2", "Player 3", "Player 4"};
  */
 int main( int argc, char* args[] )
 {
-    //
+    //graphic interface variables
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     TTF_Font *serif = NULL;
-    SDL_Surface *cards[MAX_DECK_SIZE+1], *imgs[2];
+    SDL_Surface *cards[DECK_SIZE+1], *imgs[2];
     SDL_Event event;
     int delay = 300;
     int quit = 0;
-    int money[MAX_PLAYERS] = {110, 110, 110, 110};
-	int player_cards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
-    int house_cards[MAX_CARD_HAND] = {0};
-    int pos_house_hand = 0;
-    int pos_player_hand[MAX_PLAYERS] = {0};
 
+    //game variables
+    int money[MAX_PLAYERS] = {0};
+	int playerCards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
+    int houseCards[MAX_CARD_HAND] = {0};
+    int posHouseHand = 0;
+    int posPlayersHand[MAX_PLAYERS] = {0};
+    int playersScore[MAX_PLAYERS] = {0};
+    int cardStack[DECK_SIZE * MAX_NUM_DECKS] = {0};
+
+    //game parameters
+    int numberOfDecks = 0;
+    int startingPlayerMoney = 0;
+    int betMoney = 0;
+
+
+    // initialize game mechanics
+    GameInit(&numberOfDecks, &startingPlayerMoney, &betMoney);
+    
 	// initialize graphics
 	InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
     // loads the cards images
     LoadCards(cards);
     
-    // put down some cards just for testing purposes: for you to remove !
-    player_cards[0][0] = 0;
-    player_cards[0][1] = 15;
-    
-    player_cards[0][4] = 33;
-    player_cards[1][0] = 10;
-    player_cards[1][1] = 34;
-    player_cards[1][2] = 0;
-    player_cards[1][3] = 15;
-    player_cards[1][4] = 10;
-    player_cards[2][0] = 34;
-    player_cards[2][1] = 0;
-    player_cards[3][0] = 15;
-    player_cards[3][1] = 10;
-    pos_player_hand[0] = 5;
-    pos_player_hand[1] = 5;
-    pos_player_hand[2] = 2;
-    pos_player_hand[3] = 2;
 
-    house_cards[0] = 5;
-    house_cards[1] = 12;
-    pos_house_hand = 2;
+
+    // put down some cards just for testing purposes: for you to remove !
+    playerCards[0][0] = 0;
+    playerCards[0][1] = 15;
+    
+    playerCards[0][4] = 33;
+    playerCards[1][0] = 10;
+    playerCards[1][1] = 34;
+    playerCards[1][2] = 0;
+    playerCards[1][3] = 15;
+    playerCards[1][4] = 10;
+    playerCards[2][0] = 34;
+    playerCards[2][1] = 0;
+    playerCards[3][0] = 15;
+    playerCards[3][1] = 10;
+    posPlayersHand[0] = 5;
+    posPlayersHand[1] = 5;
+    posPlayersHand[2] = 2;
+    posPlayersHand[3] = 2;
+
+    houseCards[0] = 5;
+    houseCards[1] = 12;
+    posHouseHand = 2;
 	
  	while( quit == 0 )
     {
         // while there's events to handle
         while( SDL_PollEvent( &event ) )
         {
-            //Quit the program by pressing the cross
+            // quit the program by pressing the cross
 			if( event.type == SDL_QUIT )
             {
                 quit = 1;
@@ -101,17 +137,25 @@ int main( int argc, char* args[] )
 			{
 				switch ( event.key.keysym.sym )
 				{
+                    // press 's' to "stand"
 					case SDLK_s:
                         // stand !
-						// todo 
+						// todo
+                        break; 
+                    // press 'h' to "hit"
 					case SDLK_h:
 						// hit !
                         // todo
-          
-                    //Press 'q' to exit 
+                        break;
+
+                    // press 'n' to start a new game
+                    // only works when all cards have been distributed
+                    case SDLK_n:
+                        break;
+                    // press 'q' to "quit" 
                     case SDLK_q:
                         quit = 1;
-
+                        break;
 					default:
 						break;
 				}
@@ -120,9 +164,9 @@ int main( int argc, char* args[] )
         // render game table
         RenderTable(money, serif, imgs, renderer);
         // render house cards
-        RenderHouseCards(house_cards, pos_house_hand, cards, renderer);
+        RenderHouseCards(houseCards, posHouseHand, cards, renderer);
         // render player cards
-        RenderPlayerCards(player_cards, pos_player_hand, cards, renderer);
+        RenderPlayerCards(playerCards, posPlayersHand, cards, renderer);
         // render in the screen all changes above
         SDL_RenderPresent(renderer);
     	// add a delay
@@ -140,19 +184,168 @@ int main( int argc, char* args[] )
 	return EXIT_SUCCESS;
 }
 
-/************************************************************************
- *                                                                      *
- *                      GAME MECHANICS FUNCTIONS                        *
- *                                                                      *
- ************************************************************************/
+
+/****************************************************************************
+ *                                                                          *
+ *                            UTILITY FUNCTIONS                             *
+ *                                                                          *
+ ****************************************************************************/
+
+/**
+ * @brief      Displays a welcome message on the console and asks the user 
+ *             for the game parameters
+ *
+ * @param[in,out]   cardStack         ptr to the card stack
+ * @param[out]      numOfDecks        ptr to game parameter: number of decks
+ * @param[out]      startPlayerMoney  ptr to game parameter: player starting money
+ * @param[out]      betMoney          ptr to game parameter: bet money
+ * 
+ * Displays a welcome message to the user, asks for the game parameters
+ * (number of decks to be used, amount of money with which each player starts
+ * and the bet each player makes each game) and stores them in the locations 
+ * pointed by *numOfDecks, *startPlayerMoney and *betMoney.
+ * 
+ * Seeds the pseudo-random number generator, initializes the card stack pointed
+ * by cardStack with the number of decks pointed by numOfDecks and shuffles it.
+ * 
+ * Prints a message warning the game is starting.
+ */
+void GameInit(int * cardStack, int * numOfDecks, int * startPlayerMoney, int * betMoney){
+    printf(
+        "\n"
+        "*****************************************************************\n"
+        "*                                                               *\n"
+        "*                     WELCOME TO BLACKJACK                      *\n"
+        "*                                                               *\n"
+        "*      Please input the parameters asked to start the game      *\n"
+        "*                                                               *\n"
+        "*                                     André Agostinho IST425301 *\n"
+        "*****************************************************************\n"
+        "\n"
+        );
+
+    GetGameParameters(numOfDecks, startPlayerMoney, betMoney);
+
+    srand(time(NULL));
+
+    GenerateDecks(cardStack, numOfDecks);
+
+    Suffle(cardStack, numOfDecks);
+
+    printf(
+        "\n"
+        "********************* STARTING THE GAME *************************\n"
+        "\n"
+        );
+}
+
+/**
+ * @brief      Asks the user for the game parameters and retrieves them
+ *
+ * @param[out]      numOfDecks        ptr to game parameter: number of decks
+ * @param[in,out]   startPlayerMoney  ptr to game parameter: player starting money
+ * @param[out]      betMoney          ptr to game parameter: bet money
+ * 
+ * Asks the user for the game parameters and stores them in the locations
+ * pointed by numOfDecks, startPlayerMoney and betMoney.
+ */
+void GetGameParameters(int * numOfDecks, int * startPlayerMoney, int * betMoney){
+    printf("Insert the number of decks to use: ");
+    *numOfDecks = ReadParameter(1, MAX_NUM_DECKS);
+
+    printf("Insert the amount of money each player starts with: ");
+    *startPlayerMoney = ReadParameter(1, INT_MAX);
+
+    printf("Insert the amount of money each player bets: ");
+    *betMoney = ReadParameter(1, MAX_BET * (*startPlayerMoney));
+}
+
+/**
+ * @brief      Retrieves a valid input from the user
+ *
+ * @param[in]  minValue  minimum parameter value
+ * @param[in]  maxValue  maximum parameter value
+ *
+ * @return     the read parameter
+ * 
+ * Reads a single integer parameter from the user input. 
+ * The input is only valid if an integer between minValue and maxValue is read.
+ * If the input is invalid prints a message asking for valid input.
+ */
+int ReadParameter(int minValue, int maxValue){
+    int parameter = 0;
+    bool isValid = false;
+    char buffer[15] = "\0";
+    char * testPtr = NULL;
+    while(!isValid){
+        char *rv = fgets(buffer, 15, stdin);
+        if(rv == NULL){
+            printf("Error reading input\n");
+        }
+        
+        parameter = strtol(buffer, &testPtr, 10);
+
+        //checking testPtr to distinguish between a 0 read and an invalid read
+        if (parameter >= minValue && parameter <= maxValue && buffer != testPtr) 
+            isValid = true;
+
+        else 
+            printf ("Invalid input, please input an integer number between" 
+                " %d and %d: ", minValue, maxValue);
+    }
+
+    return parameter;
+}
 
 
 
-/************************************************************************
- *                                                                      *
- *                          GRAPHICAL FUNCTIONS                         *
- *                                                                      *
- ************************************************************************/
+/****************************************************************************
+ *                                                                          *
+ *                         GAME MECHANICS FUNCTIONS                         *
+ *                                                                          *
+ ****************************************************************************/
+
+/**
+ * @brief      Loads the decks to the card stack
+ *
+ * @param[in,out]   cardStack   ptr to the card stack where to put the decks
+ * @param[in]       numOfDecks  number of decks to load
+ * 
+ * Initializes the card stack pointed by cardStack with the number of decks
+ * pointed by numOfDecks.
+ */
+void GenerateDecks(int * cardStack, int numOfDecks){
+    for (int i = 0; i < numOfDecks; i++){
+        for (int j = 0; j < DECK_SIZE; j++){
+            cardStack[i * DECK_SIZE + j] = j;
+            printf("%d\n", cardStack[i * DECK_SIZE + j]);
+        }
+    }
+}
+
+/**
+ * @brief      Shuffles the card stack
+ *
+ * @param[in,out]   cardStack   ptr to the card stack to be shuffled
+ * @param[in]       numOfDecks  number of decks used
+ * 
+ * Shuffles the card stack pointed by cardStack using Fisher-Yates algorithm
+ */
+void Shuffle(int * cardStack, int numOfDecks){
+    for (int i = numOfDecks * DECK_SIZE - 1; i >= 1; i--){
+        int j, aux; 
+        j = rand() % i;
+        aux = cardStack[i];
+        cardStack[i] = cardStack[j];
+        cardStack[j] = aux;
+    }
+}
+                                                                            
+/****************************************************************************
+ *                                                                          *
+ *                      GRAPHICAL INTERFACE FUNCTIONS                       *
+ *                                                                          *
+ ****************************************************************************/
 
 /**
  * RenderTable: Draws the table where the game will be played, namely:
@@ -245,7 +438,7 @@ void RenderHouseCards(int _house[], int _pos_house_hand, SDL_Surface **_cards, S
     {
         x = (div/2-_pos_house_hand/2+1)*CARD_WIDTH + 15;
         y = (int) (0.26f*HEIGHT_WINDOW);
-        RenderCard(x, y, MAX_DECK_SIZE, _cards, _renderer);
+        RenderCard(x, y, DECK_SIZE, _cards, _renderer);
     }
 }
 
@@ -314,7 +507,7 @@ void LoadCards(SDL_Surface **_cards)
     char filename[STRING_SIZE];
 
      // loads all cards to an array
-    for (i = 0 ; i < MAX_DECK_SIZE; i++ )
+    for (i = 0 ; i < DECK_SIZE; i++ )
     {
         // create the filename !
         sprintf(filename, ".//cartas//carta_%02d.png", i+1);
@@ -344,7 +537,7 @@ void LoadCards(SDL_Surface **_cards)
 void UnLoadCards(SDL_Surface **_array_of_cards)
 {
     // unload all cards of the memory: +1 for the card back
-    for (int i = 0 ; i < MAX_DECK_SIZE + 1; i++ )
+    for (int i = 0 ; i < DECK_SIZE + 1; i++ )
     {
         SDL_FreeSurface(_array_of_cards[i]);
     }
