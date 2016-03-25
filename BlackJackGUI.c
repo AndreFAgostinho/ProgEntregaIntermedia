@@ -48,10 +48,13 @@ void UnLoadCards(SDL_Surface **);
 
 //function declaration for game mechanics
 void GenerateDecks(int *, int);
-void Shuffle(int *, int);
+void Shuffle(int *, int *, int);
+int CountScore(int * , int);
+int CardPoints(int);
+void HandCardToPlayer(int *, int *, int *, int *);
 
 //utility function declarations
-void GameInit(int *, int *, int *);
+void GameInit(int *, int *, int *, int *);
 void GetGameParameters(int *, int *, int *);
 int ReadParameter(int , int);
 
@@ -60,10 +63,8 @@ const char myName[] = "André Agostinho";
 const char myNumber[] = "IST425301";
 const char * playerNames[] = {"Player 1", "Player 2", "Player 3", "Player 4"};
 
-/**
- * main function: entry point of the program
- * only to invoke other functions !
- */
+
+
 int main( int argc, char* args[] )
 {
     //graphic interface variables
@@ -76,29 +77,37 @@ int main( int argc, char* args[] )
     int quit = 0;
 
     //game variables
+    int gameRound = 1;
+    int currentPlayer = 0;
     int money[MAX_PLAYERS] = {0};
+    int playersScore[MAX_PLAYERS] = {0};
+
 	int playerCards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
+    int posPlayersHand[MAX_PLAYERS] = {0};
     int houseCards[MAX_CARD_HAND] = {0};
     int posHouseHand = 0;
-    int posPlayersHand[MAX_PLAYERS] = {0};
-    int playersScore[MAX_PLAYERS] = {0};
+    
     int cardStack[DECK_SIZE * MAX_NUM_DECKS] = {0};
-
+    int stackTopCard = 0;
+    
     //game parameters
     int numberOfDecks = 0;
     int startingPlayerMoney = 0;
     int betMoney = 0;
 
+    
+
 
     // initialize game mechanics
-    GameInit(&numberOfDecks, &startingPlayerMoney, &betMoney);
+    GameInit(cardStack, &numberOfDecks, &startingPlayerMoney, &betMoney);
     
 	// initialize graphics
 	InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
     // loads the cards images
     LoadCards(cards);
     
-
+    Shuffle();
+    HandInitialCards();
 
     // put down some cards just for testing purposes: for you to remove !
     playerCards[0][0] = 0;
@@ -139,8 +148,9 @@ int main( int argc, char* args[] )
 				{
                     // press 's' to "stand"
 					case SDLK_s:
-                        // stand !
-						// todo
+                        
+                        
+						
                         break; 
                     // press 'h' to "hit"
 					case SDLK_h:
@@ -161,6 +171,8 @@ int main( int argc, char* args[] )
 				}
 			}
         }
+
+
         // render game table
         RenderTable(money, serif, imgs, renderer);
         // render house cards
@@ -192,22 +204,24 @@ int main( int argc, char* args[] )
  ****************************************************************************/
 
 /**
- * @brief      Displays a welcome message on the console and asks the user 
- *             for the game parameters
+ * @brief         Displays a welcome message on the console and asks the user
+ *                for the game parameters
  *
- * @param[in,out]   cardStack         ptr to the card stack
- * @param[out]      numOfDecks        ptr to game parameter: number of decks
- * @param[out]      startPlayerMoney  ptr to game parameter: player starting money
- * @param[out]      betMoney          ptr to game parameter: bet money
- * 
+ * @param[in,out] cardStack         ptr to the card stack
+ * @param[out]    numOfDecks        ptr to game parameter: number of decks
+ * @param[out]    startPlayerMoney  ptr to game parameter: player starting
+ *                                  money
+ * @param[out]    betMoney          ptr to game parameter: bet money
+ *
  * Displays a welcome message to the user, asks for the game parameters
  * (number of decks to be used, amount of money with which each player starts
- * and the bet each player makes each game) and stores them in the locations 
+ * and the bet each player makes each game) and stores them in the locations
  * pointed by *numOfDecks, *startPlayerMoney and *betMoney.
- * 
- * Seeds the pseudo-random number generator, initializes the card stack pointed
- * by cardStack with the number of decks pointed by numOfDecks and shuffles it.
- * 
+ *
+ * Seeds the pseudo-random number generator, initializes the card stack
+ * pointed by cardStack with the number of decks pointed by numOfDecks and
+ * shuffles it.
+ *
  * Prints a message warning the game is starting.
  */
 void GameInit(int * cardStack, int * numOfDecks, int * startPlayerMoney, int * betMoney){
@@ -240,12 +254,13 @@ void GameInit(int * cardStack, int * numOfDecks, int * startPlayerMoney, int * b
 }
 
 /**
- * @brief      Asks the user for the game parameters and retrieves them
+ * @brief         Asks the user for the game parameters and retrieves them
  *
- * @param[out]      numOfDecks        ptr to game parameter: number of decks
- * @param[in,out]   startPlayerMoney  ptr to game parameter: player starting money
- * @param[out]      betMoney          ptr to game parameter: bet money
- * 
+ * @param[out]    numOfDecks        ptr to game parameter: number of decks
+ * @param[in,out] startPlayerMoney  ptr to game parameter: player starting
+ *                                  money
+ * @param[out]    betMoney          ptr to game parameter: bet money
+ *
  * Asks the user for the game parameters and stores them in the locations
  * pointed by numOfDecks, startPlayerMoney and betMoney.
  */
@@ -267,10 +282,10 @@ void GetGameParameters(int * numOfDecks, int * startPlayerMoney, int * betMoney)
  * @param[in]  maxValue  maximum parameter value
  *
  * @return     the read parameter
- * 
- * Reads a single integer parameter from the user input. 
- * The input is only valid if an integer between minValue and maxValue is read.
- * If the input is invalid prints a message asking for valid input.
+ *
+ * Reads a single integer parameter from the user input. The input is only
+ * valid if an integer between minValue and maxValue is read. If the input is
+ * invalid prints a message asking for valid input.
  */
 int ReadParameter(int minValue, int maxValue){
     int parameter = 0;
@@ -306,11 +321,11 @@ int ReadParameter(int minValue, int maxValue){
  ****************************************************************************/
 
 /**
- * @brief      Loads the decks to the card stack
+ * @brief         Loads the decks to the card stack
  *
- * @param[in,out]   cardStack   ptr to the card stack where to put the decks
- * @param[in]       numOfDecks  number of decks to load
- * 
+ * @param[in,out] cardStack   ptr to the card stack where to put the decks
+ * @param[in]     numOfDecks  number of decks to load
+ *
  * Initializes the card stack pointed by cardStack with the number of decks
  * pointed by numOfDecks.
  */
@@ -324,14 +339,15 @@ void GenerateDecks(int * cardStack, int numOfDecks){
 }
 
 /**
- * @brief      Shuffles the card stack
+ * @brief         Shuffles the card stack
  *
- * @param[in,out]   cardStack   ptr to the card stack to be shuffled
- * @param[in]       numOfDecks  number of decks used
- * 
+ * @param[in,out] cardStack     ptr to the card stack to be shuffled
+ * @param[out]    stackTopCard  ptr to the stack's top card location
+ * @param[in]     numOfDecks    number of decks used
+ *
  * Shuffles the card stack pointed by cardStack using Fisher-Yates algorithm
  */
-void Shuffle(int * cardStack, int numOfDecks){
+void Shuffle(int * cardStack, int * stackTopCard, int numOfDecks){
     for (int i = numOfDecks * DECK_SIZE - 1; i >= 1; i--){
         int j, aux; 
         j = rand() % i;
@@ -339,6 +355,105 @@ void Shuffle(int * cardStack, int numOfDecks){
         cardStack[i] = cardStack[j];
         cardStack[j] = aux;
     }
+    *stackTopCard = 0;
+}
+
+/**
+ * @brief      Counts the points in a player's (or house) hand
+ *
+ * @param[in]  playerHand      ptr to the array of cards to count points
+ * @param[in]  numCardsInHand  number of cards in hand
+ *
+ * @return     the number of points in the player's (or house) hand
+ */
+int CountScore(int * playerHand, int numCardsInHand){
+
+    int playerScore, numOfAces;
+    for (int i = 0; i < numCardsInHand; i++){
+        int cardID, cardRank;
+
+        cardID = playerHand[i];
+        cardRank = cardID % 13;
+
+        playerScore += cardPoints(cardRank);
+
+        if (cardRank == 12){
+            numOfAces += 1;
+        }
+    }
+
+    // account for ace's two possible values
+    for (int i = 0; i < numOfAces; i++){
+        if (playerScore > 21) {
+            playerScore -= 10; // change an ace's value to 1
+        }
+    }
+
+    return playerScore;
+}
+
+/**
+ * @brief      Returns the value of a given card based on its rank
+ *
+ * @param[in]  cardRank  rank of the card
+ *
+ * @return     the value of the card based on cardRank
+ * 
+ * Aces return 11 points
+ */
+int CardPoints(int cardRank){
+    if (cardRank <= 7){ //number cards
+        return cardRank + 2;
+    } else if (cardRank <= 11){ //10 point cards
+        return 10;
+    } else { //ace
+        return 11;
+    }
+}
+
+
+/**
+ * @brief         Hands a card to a player (or house)
+ *
+ * @param[in]     cardStack       ptr to the card stack
+ * @param[in,out] stackTopCard    ptr to position of the top card in the stack
+ * @param[out]    playerHand      ptr to player/house hand
+ * @param[in,out] numCardsInHand  ptr to number of cards in player's hand
+ *
+ * Copies cardStack[stackTopCard] to playerHand[numCardsInHand] and increments
+ * stackTopCard and playerHand.
+ */
+void HandCardToPlayer(  int * cardStack, int * stackTopCard, int numOfDecks,
+                        int * playerHand, int * numCardsInHand)
+{
+    playerHand[*numCardsInHand] = DrawCard(cardStack, stackTopCard, numOfDecks);
+    *numCardsInHand ++;
+}
+
+void HandInitialCards(  int * cardStack, int * stackTopCard, int numOfDecks, 
+                        int ** playerCards, int * posPlayerHand, 
+                        int * houseCards, int * posHouseHand)
+{
+    for (int i = 0; i < 2; i++){
+        for (int j = 0; j < MAX_PLAYERS; j++){
+            HandCardToPlayer(cardStack, stackTopCard, &playerCards[j], &posPlayerHand[j]);
+        }
+        HandCardToPlayer(cardStack, stackTopCard, houseCards, posHouseHand);
+    }
+}
+
+int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
+    int drawnCard = -1;
+    drawnCard = cardStack[*stackTopCard];
+
+    *stackTopCard ++;
+
+    if (*stackTopCard == numOfDecks * DECK_SIZE){
+        Shuffle (cardStack, numOfDecks);
+        *stackTopCard = 0;
+    }
+
+    return drawnCard;
 }
                                                                             
 /****************************************************************************
