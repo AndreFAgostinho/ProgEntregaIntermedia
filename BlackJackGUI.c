@@ -77,13 +77,15 @@ int main( int argc, char* args[] )
     int quit = 0;
 
     //game variables
-    int gameRound = 1;
+    bool gameHasEnded = false;
     int currentPlayer = 0;
-    int money[MAX_PLAYERS] = {0};
-    int playersScore[MAX_PLAYERS] = {0};
+    bool isPlaying[MAX_PLAYERS] = {false};
+    int playerMoney[MAX_PLAYERS] = {0};
+    int playerScore[MAX_PLAYERS] = {0};
+    int houseScore = 0;
 
 	int playerCards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
-    int posPlayersHand[MAX_PLAYERS] = {0};
+    int posPlayerHand[MAX_PLAYERS] = {0};
     int houseCards[MAX_CARD_HAND] = {0};
     int posHouseHand = 0;
     
@@ -99,38 +101,15 @@ int main( int argc, char* args[] )
 
 
     // initialize game mechanics
-    GameInit(cardStack, &numberOfDecks, &startingPlayerMoney, &betMoney);
+    GameInit(cardStack, &numberOfDecks, &startingPlayerMoney, &betMoney, playerMoney, isPlaying);
     
 	// initialize graphics
 	InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
     // loads the cards images
     LoadCards(cards);
     
-    Shuffle();
-    HandInitialCards();
-
-    // put down some cards just for testing purposes: for you to remove !
-    playerCards[0][0] = 0;
-    playerCards[0][1] = 15;
-    
-    playerCards[0][4] = 33;
-    playerCards[1][0] = 10;
-    playerCards[1][1] = 34;
-    playerCards[1][2] = 0;
-    playerCards[1][3] = 15;
-    playerCards[1][4] = 10;
-    playerCards[2][0] = 34;
-    playerCards[2][1] = 0;
-    playerCards[3][0] = 15;
-    playerCards[3][1] = 10;
-    posPlayersHand[0] = 5;
-    posPlayersHand[1] = 5;
-    posPlayersHand[2] = 2;
-    posPlayersHand[3] = 2;
-
-    houseCards[0] = 5;
-    houseCards[1] = 12;
-    posHouseHand = 2;
+    NewGame(cardStack, &stackTopCard, numberOfDecks, playerCards, 
+        &posPlayerHand, houseCards, &posHouseHand, &currentPlayer);
 	
  	while( quit == 0 )
     {
@@ -148,37 +127,48 @@ int main( int argc, char* args[] )
 				{
                     // press 's' to "stand"
 					case SDLK_s:
-                        
-                        
-						
-                        break; 
+                        if (!gameHasEnded) gameHasEnded = Stand(isPLaying, &currentPlayer);
+                        break;
+
                     // press 'h' to "hit"
 					case SDLK_h:
-						// hit !
-                        // todo
+                        if (!gameHasEnded) {
+                            gameHasEnded = Hit(cardStack, &stackTopCard, 
+                                numberOfDecks, playerCards, posPlayerHand, 
+                                playerScore, &currentPlayer, isPlaying);
+                        }
                         break;
 
                     // press 'n' to start a new game
                     // only works when all cards have been distributed
                     case SDLK_n:
+                        if (gameHasEnded){
+                            gameHasEnded = NewGame(cardStack, &stackTopCard, numberOfDecks, 
+                                playerCards, &posPlayerHand, houseCards, 
+                                &posHouseHand, &currentPlayer);
+                        }
                         break;
+
                     // press 'q' to "quit" 
                     case SDLK_q:
                         quit = 1;
                         break;
+
 					default:
 						break;
 				}
 			}
         }
-
+        if (gameHasEnded){
+            HousePlay();
+        }
 
         // render game table
         RenderTable(money, serif, imgs, renderer);
         // render house cards
         RenderHouseCards(houseCards, posHouseHand, cards, renderer);
         // render player cards
-        RenderPlayerCards(playerCards, posPlayersHand, cards, renderer);
+        RenderPlayerCards(playerCards, posPlayerHand, cards, renderer);
         // render in the screen all changes above
         SDL_RenderPresent(renderer);
     	// add a delay
@@ -205,26 +195,33 @@ int main( int argc, char* args[] )
 
 /**
  * @brief         Displays a welcome message on the console and asks the user
- *                for the game parameters
+ *                for the game parameters then initializes game variables
  *
- * @param[in,out] cardStack         ptr to the card stack
+ * @param[in,out] cardStack         ptr to the card stack array
  * @param[out]    numOfDecks        ptr to game parameter: number of decks
  * @param[out]    startPlayerMoney  ptr to game parameter: player starting
  *                                  money
  * @param[out]    betMoney          ptr to game parameter: bet money
+ * @param[in,out] playerMoney       ptr to player money array
+ * @param[out]    isPlaying         ptr to array with players still in game
  *
  * Displays a welcome message to the user, asks for the game parameters
  * (number of decks to be used, amount of money with which each player starts
- * and the bet each player makes each game) and stores them in the locations
- * pointed by *numOfDecks, *startPlayerMoney and *betMoney.
+ * and the bet each player makes each game) and stores them in *numOfDecks,
+ * *startPlayerMoney and *betMoney.
+ *
+ * Initializes playerMoney array with *startPlayerMoney and sets all isPlaying
+ * index to true.
  *
  * Seeds the pseudo-random number generator, initializes the card stack
- * pointed by cardStack with the number of decks pointed by numOfDecks and
- * shuffles it.
+ * pointed by cardStack with the number of decks *numOfDecks and shuffles it.
  *
  * Prints a message warning the game is starting.
  */
-void GameInit(int * cardStack, int * numOfDecks, int * startPlayerMoney, int * betMoney){
+void GameInit(
+        int * cardStack, int * numOfDecks, int * startPlayerMoney, 
+        int * betMoney, int * playerMoney, bool * isPlaying)
+{
     printf(
         "\n"
         "*****************************************************************\n"
@@ -239,6 +236,11 @@ void GameInit(int * cardStack, int * numOfDecks, int * startPlayerMoney, int * b
         );
 
     GetGameParameters(numOfDecks, startPlayerMoney, betMoney);
+
+    for (int i = 0; i < MAX_PLAYERS; i ++){
+        playerMoney[i] = *startPlayerMoney;
+        isPlaying[i] = true;
+    }
 
     srand(time(NULL));
 
@@ -333,7 +335,6 @@ void GenerateDecks(int * cardStack, int numOfDecks){
     for (int i = 0; i < numOfDecks; i++){
         for (int j = 0; j < DECK_SIZE; j++){
             cardStack[i * DECK_SIZE + j] = j;
-            printf("%d\n", cardStack[i * DECK_SIZE + j]);
         }
     }
 }
@@ -341,7 +342,7 @@ void GenerateDecks(int * cardStack, int numOfDecks){
 /**
  * @brief         Shuffles the card stack
  *
- * @param[in,out] cardStack     ptr to the card stack to be shuffled
+ * @param[in,out] cardStack     ptr to the card stack array to be shuffled
  * @param[out]    stackTopCard  ptr to the stack's top card location
  * @param[in]     numOfDecks    number of decks used
  *
@@ -398,7 +399,7 @@ int CountScore(int * playerHand, int numCardsInHand){
  * @param[in]  cardRank  rank of the card
  *
  * @return     the value of the card based on cardRank
- * 
+ *
  * Aces return 11 points
  */
 int CardPoints(int cardRank){
@@ -413,15 +414,16 @@ int CardPoints(int cardRank){
 
 
 /**
- * @brief         Hands a card to a player (or house)
+ * @brief         Hands a card to a player (or house) from the card stack
  *
- * @param[in]     cardStack       ptr to the card stack
+ * @param[in]     cardStack       ptr to the card stack array
  * @param[in,out] stackTopCard    ptr to position of the top card in the stack
+ * @param[in]     numOfDecks      number of decks used
  * @param[out]    playerHand      ptr to player/house hand
  * @param[in,out] numCardsInHand  ptr to number of cards in player's hand
  *
- * Copies cardStack[stackTopCard] to playerHand[numCardsInHand] and increments
- * stackTopCard and playerHand.
+ * Invokes DrawCard to assign a card to playerHand[*numCardsInHand] and
+ * increments *numCardsInHand.
  */
 void HandCardToPlayer(  int * cardStack, int * stackTopCard, int numOfDecks,
                         int * playerHand, int * numCardsInHand)
@@ -430,20 +432,23 @@ void HandCardToPlayer(  int * cardStack, int * stackTopCard, int numOfDecks,
     *numCardsInHand ++;
 }
 
-void HandInitialCards(  int * cardStack, int * stackTopCard, int numOfDecks, 
-                        int ** playerCards, int * posPlayerHand, 
-                        int * houseCards, int * posHouseHand)
-{
-    for (int i = 0; i < 2; i++){
-        for (int j = 0; j < MAX_PLAYERS; j++){
-            HandCardToPlayer(cardStack, stackTopCard, &playerCards[j], &posPlayerHand[j]);
-        }
-        HandCardToPlayer(cardStack, stackTopCard, houseCards, posHouseHand);
-    }
-}
 
+/**
+ * @brief         Draws a card from the card stack
+ *
+ * @param[in]     cardStack     ptr to the card stack array
+ * @param[in,out] stackTopCard  ptr to position of the top card in the stack
+ * @param[in]     numOfDecks    number of decks used
+ *
+ * @return        the id of the drawn card (stack's top card)
+ *
+ * Returns cardStack[*stackTopCard] and increments *stackTopCard.
+ *
+ * If the card returned was the last card of the stack then it shuffles
+ * cardStack and resets *stackTopCard.
+ */
 int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
-    int drawnCard = -1;
+    int drawnCard;
     drawnCard = cardStack[*stackTopCard];
 
     *stackTopCard ++;
@@ -455,7 +460,192 @@ int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
 
     return drawnCard;
 }
-                                                                            
+
+/**
+ * @brief         Starts a new game, handing the first two cards to each
+ *                player or house.
+ *
+ * @param[in]     cardStack      ptr to card stack array
+ * @param[in,out] stackTopCard   ptr to location of the stack top card
+ * @param[in]     numOfDecks     number of decks used
+ * @param[in,out] playerCards    ptr to all player's cards array
+ * @param[in,out] posPlayerHand  ptr to number of cards in player's hand array
+ * @param[out]    houseCards     ptr to  array of house cards
+ * @param[in,out] posHouseHand   ptr to number of cards in house hand
+ * @param[in,out] currentPlayer  ptr to current player number
+ * @param[out]    playerScore    ptr to array of player scores
+ * @param[in,out] isPlaying      ptr to array with players still in game
+ *
+ * @return        true if the game is over, false otherwise
+ *
+ * Resets posPlayerHand and posHouseHand and hands two cards to each player
+ * and house.
+ *
+ * Searches for BlackJacks in the player's hands and returns true if all the
+ * players have a BlackJack and false otherwise.
+ */
+bool NewGame(
+        int * cardStack, int * stackTopCard, int numOfDecks, 
+        int ** playerCards, int * posPlayerHand, 
+        int * houseCards, int * posHouseHand, 
+        int * currentPlayer, int * playerScore, bool * isPlaying)
+{
+    *currentPlayer = 0;
+
+    // reset everyone's hands
+    for (int i = 0; i < MAX_PLAYERS; i++){
+        posPlayerHand[i] = 0;        
+    }
+    *posHouseHand = 0;
+
+    // hand initial cards
+    for (int i = 0; i < 2; i++){
+        for (int j = 0; j < MAX_PLAYERS; j++){
+            HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
+                &playerCards[j], &posPlayerHand[j]);
+        }
+        HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
+            houseCards, posHouseHand);
+    }
+
+    // search for BlackJacks
+    for (int i = 0; i < MAX_PLAYERS; i++){
+        playerScore[i] = CountScore(playerCards[i], posPlayerHand[i]);
+        if (playerScore[i] == 21){
+            BlackJack(isPlaying[i]);
+            currentPlayer ++;
+        }
+    }
+
+    // end the game if all the players have a BlackJack
+    if(currentPlayer == MAX_PLAYERS){
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+/**
+ * @brief         "Hit" function. Hands a card and counts player's score.
+ *
+ * @param[in]     cardStack      ptr to card stack array
+ * @param[in,out] stackTopCard   ptr to index of the top card of the card
+ *                               stack
+ * @param[in]     numOfDecks     number of decks used
+ * @param[in,out] playerCards    ptr to array of all players cards
+ * @param[in,out] posPlayerHand  ptr to array of number of cards on players
+ *                               hands
+ * @param[in,out] playerScore    ptr to array of players scores
+ * @param[in,out] currentPlayer  ptr to player currently playing
+ * @param[in,out] isPlaying      ptr to array with players still in play
+ *
+ * @return        true if the game is over, false otherwise
+ *
+ * Hands a card to the player, counts his score and checks for a bust. If he
+ * does bust passes the turn to the next player or returns true if there is no
+ * other player to play.
+ */
+bool Hit(
+    int * cardStack, int * stackTopCard, int numOfDecks, int ** playerCards, 
+    int * posPlayerHand, int * playerScore, int * currentPlayer, int * isPlaying)
+{
+    int nextPlayer;
+
+    HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
+        playerCards[currentPlayer], posPlayerHand[currentPlayer]);
+
+    // check for bust or BlackJack
+    *playerScore = CountScore(playerCards[currentPlayer], posPlayerHand[currentPlayer]);
+
+    if (*playerScore >= 21){
+        if (*playerScore > 21) Bust(isPlaying[currentPlayer]);
+        else BlackJack(isPlaying[currentPlayer]);
+
+        nextPlayer = WhosNext(isPlaying, *currentPlayer);
+
+        // end the game if there is no other player to play
+        if (nextPlayer == -1){
+            return true;
+        } else {
+            *currentPlayer = nextPlayer;
+            return false;
+        }
+
+    } else {
+        return false;
+    }
+}
+
+/**
+ * @brief      "Stand" Function. Passes the turn to next player
+ *
+ * @param      isPLaying      ptr to array with players still in play
+ * @param      currentPlayer  ptr to player currently playing
+ *
+ * @return     true if the game is over, false otherwise
+ */
+bool Stand(int * isPLaying, int * currentPlayer){
+    int nextPlayer;
+
+    nextPlayer = WhosNext(isPlaying, *currentPlayer);
+
+    // end the game if there is no other player to play
+    if (nextPlayer == -1){
+            return true;
+        } else {
+            *currentPlayer = nextPlayer;
+            return false;
+        }
+}
+
+
+void Bust(bool * isPlaying){
+    *isPlaying = false;
+}
+
+void BlackJack(bool * isPlaying){
+    *isPlaying = false;
+}
+
+
+/**
+ * @brief      Picks the next player which is still in play and flags if there
+ *             is no player left to play
+ *
+ * @param      isPlaying      ptr to array with players still in play
+ * @param[in]  currentPlayer  ptr to the player currently playing
+ *
+ * @return     number of the next player if there is a valid player, -1 if
+ *             there is no player left
+ */
+int WhosNext(int * isPlaying, int currentPlayer){
+    for (int i = currentPlayer; i < MAX_PLAYERS; i++){
+
+        if (i == MAX_PLAYERS - 1){
+            return (-1); // no player left to play
+        } else if (isPLaying[i + 1]){
+            return (i + 1); // next player
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /****************************************************************************
  *                                                                          *
  *                      GRAPHICAL INTERFACE FUNCTIONS                       *
