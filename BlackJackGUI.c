@@ -52,6 +52,13 @@ void Shuffle(int *, int *, int);
 int CountScore(int * , int);
 int CardPoints(int);
 void HandCardToPlayer(int *, int *, int *, int *);
+int WhosNext(int *, int);
+void BlackJack(bool *);
+void Bust(bool *, int *);
+bool NewGame(int *, int *, int, int **, int *, int *, int *, int *, int *, bool *);
+bool Stand(int *, int *);
+bool Hit(int *, int *, int, int **, int *, int *, int *, int *, int *);
+void HouseTurn(int *, int *, int, int *, int *, int *, int *, int *, int, int *);
 
 //utility function declarations
 void GameInit(int *, int *, int *, int *);
@@ -101,7 +108,7 @@ int main( int argc, char* args[] )
 
 
     // initialize game mechanics
-    GameInit(cardStack, &numberOfDecks, &startingPlayerMoney, &betMoney, playerMoney, isPlaying);
+    GameInit(cardStack, &numberOfDecks, &startingPlayerMoney, &betMoney, playerMoney);
     
 	// initialize graphics
 	InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
@@ -109,7 +116,7 @@ int main( int argc, char* args[] )
     LoadCards(cards);
     
     NewGame(cardStack, &stackTopCard, numberOfDecks, playerCards, 
-        &posPlayerHand, houseCards, &posHouseHand, &currentPlayer);
+        &posPlayerHand, houseCards, &posHouseHand, &currentPlayer, isPlaying);
 	
  	while( quit == 0 )
     {
@@ -127,7 +134,7 @@ int main( int argc, char* args[] )
 				{
                     // press 's' to "stand"
 					case SDLK_s:
-                        if (!gameHasEnded) gameHasEnded = Stand(isPLaying, &currentPlayer);
+                        if (!gameHasEnded) gameHasEnded = Stand(isPlaying, &currentPlayer);
                         break;
 
                     // press 'h' to "hit"
@@ -145,7 +152,7 @@ int main( int argc, char* args[] )
                         if (gameHasEnded){
                             gameHasEnded = NewGame(cardStack, &stackTopCard, numberOfDecks, 
                                 playerCards, &posPlayerHand, houseCards, 
-                                &posHouseHand, &currentPlayer);
+                                &posHouseHand, &currentPlayer, isPlaying);
                         }
                         break;
 
@@ -160,7 +167,9 @@ int main( int argc, char* args[] )
 			}
         }
         if (gameHasEnded){
-            HousePlay();
+            HouseTurn(cardStack, &stackTopCard, numberOfDecks, houseCards,
+                &posHouseHand, &houseScore, playerScore, playerMoney,
+                betMoney, isPlaying);
         }
 
         // render game table
@@ -539,16 +548,18 @@ bool NewGame(
  * @param[in,out] playerScore    ptr to array of players scores
  * @param[in,out] currentPlayer  ptr to player currently playing
  * @param[in,out] isPlaying      ptr to array with players still in play
+ * @param         playerMoney    ptr to array with players money
  *
  * @return        true if the game is over, false otherwise
  *
  * Hands a card to the player, counts his score and checks for a bust. If he
- * does bust passes the turn to the next player or returns true if there is no
- * other player to play.
+ * does bust deducts the bet money from the player money and passes the turn
+ * to the next player or returns true if there is no other player to play.
  */
 bool Hit(
     int * cardStack, int * stackTopCard, int numOfDecks, int ** playerCards, 
-    int * posPlayerHand, int * playerScore, int * currentPlayer, int * isPlaying)
+    int * posPlayerHand, int * playerScore, int * currentPlayer, 
+    int * isPlaying, int * playerMoney)
 {
     int nextPlayer;
 
@@ -559,7 +570,7 @@ bool Hit(
     *playerScore = CountScore(playerCards[currentPlayer], posPlayerHand[currentPlayer]);
 
     if (*playerScore >= 21){
-        if (*playerScore > 21) Bust(isPlaying[currentPlayer]);
+        if (*playerScore > 21) Bust(isPlaying[currentPlayer], playerMoney[currentPlayer]);
         else BlackJack(isPlaying[currentPlayer]);
 
         nextPlayer = WhosNext(isPlaying, *currentPlayer);
@@ -580,12 +591,12 @@ bool Hit(
 /**
  * @brief      "Stand" Function. Passes the turn to next player
  *
- * @param      isPLaying      ptr to array with players still in play
+ * @param      isPlaying      ptr to array with players still in play
  * @param      currentPlayer  ptr to player currently playing
  *
  * @return     true if the game is over, false otherwise
  */
-bool Stand(int * isPLaying, int * currentPlayer){
+bool Stand(int * isPlaying, int * currentPlayer){
     int nextPlayer;
 
     nextPlayer = WhosNext(isPlaying, *currentPlayer);
@@ -600,8 +611,9 @@ bool Stand(int * isPLaying, int * currentPlayer){
 }
 
 
-void Bust(bool * isPlaying){
+void Bust(bool * isPlaying, int * playerMoney){
     *isPlaying = false;
+    *playerMoney -= betMoney;
 }
 
 void BlackJack(bool * isPlaying){
@@ -624,10 +636,66 @@ int WhosNext(int * isPlaying, int currentPlayer){
 
         if (i == MAX_PLAYERS - 1){
             return (-1); // no player left to play
-        } else if (isPLaying[i + 1]){
+        } else if (isPlaying[i + 1]){
             return (i + 1); // next player
         }
     }
+}
+
+void HouseTurn(
+        int * cardStack, int * stackTopCard, int numOfDecks, int * houseCards,
+        int * posHouseHand, int * houseScore, int * playerScore, 
+        int * playerMoney, int betMoney, int * isPlaying)
+{
+    bool houseFinished = false;
+    bool houseBusted = false;
+
+    // take cards till more than 17 points and no soft hand
+    while(!houseFinished){
+        *houseScore = CountScore(houseCards, posHouseHand);
+
+        if (houseScore > 21){
+            houseFinished = true;
+            houseBusted = true;
+        } else if (houseScore > 17 && houseScore <= 21){
+            houseFinished = true;
+        } else if (houseScore == 17) {
+            // check for soft hand (at least one ace)
+            for (int i = 0; i < posHouseHand, i ++){
+                if (houseCards[i] % 13 == 12){
+                    // nothing happens
+                } else {
+                    houseFinished = true;
+                }
+            }
+        }
+
+        if (!houseFinished) {
+            HandCardToPlayer(cardStack, stackTopCard, numOfDecks, houseCards, 
+                posHouseHand);
+        }
+    }
+
+    // check win, loss or draw (nothing is done)
+    for (int i = 0; i < MAX_PLAYERS; i++){
+
+        if (playerScore[i] > 21) { // busted
+            // bet money took already when busted
+            
+        } else if (playerScore[i] < *houseScore) { // lost
+            playerMoney[i] -= betMoney;
+        } else if (playerScore[i] > *houseScore) { // won
+            playerMoney[i] += betMoney;
+        }
+
+        // check if the player is broke and check him to lay otherwise
+        if (playerMoney[i] < betMoney){
+            isPlaying[i] == false;
+        } else {
+            isPlaying[i] == true;
+        }
+    }
+
 }
 
 
