@@ -30,6 +30,19 @@
 #define MAX_BET 0.2f           // maximum starting player money fraction that can
                               // be used as bet
 
+// playerState macros
+#define STATES 4
+#define NORMAL 0
+#define BLACKJACK 1
+#define BUSTED 2
+#define BROKE 3
+
+// stats macros
+#define STATS 4
+#define WIN 0
+#define DRAW 1
+#define LOSS 2
+#define BALANCE 3
 
 // declaration of the functions related to graphical interface
 void InitEverything(int , int , TTF_Font **, SDL_Surface **, SDL_Window ** , SDL_Renderer ** );
@@ -41,30 +54,47 @@ int RenderText(int , int , const char* , TTF_Font *, SDL_Color *, SDL_Renderer *
 int RenderLogo(int , int , SDL_Surface *, SDL_Renderer * );
 void RenderTable(int [], TTF_Font *, SDL_Surface **, SDL_Renderer * , int);
 void RenderCard(int , int , int , SDL_Surface **, SDL_Renderer * );
-void RenderHouseCards(int [], int , SDL_Surface **, SDL_Renderer * );
+void RenderHouseCards(int [], int , SDL_Surface **, SDL_Renderer *, bool);
 void RenderPlayerCards(int [][MAX_CARD_HAND], int [], SDL_Surface **, SDL_Renderer * );
 void LoadCards(SDL_Surface **);
 void UnLoadCards(SDL_Surface **);
 
 //function declaration for game mechanics
+
 void GenerateDecks(int *, int);
 void Shuffle(int *, int *, int);
 int CountScore(int * , int);
 int CardPoints(int);
-void HandCardToPlayer(int *, int *, int, int *, int *);
-int DrawCard(int *, int *, int);
-int WhosNext(bool *, int);
-void BlackJack(bool *);
-void Bust(bool *, int *, int);
-bool NewGame(int *, int *, int, int [][MAX_CARD_HAND], int *, int *, int *, int *, int *, bool *);
-bool Stand(bool *, int *);
-bool Hit(int *, int *, int, int [][MAX_CARD_HAND], int *, int *, int *, bool *, int *, int);
-void HouseTurn(int *, int *, int, int *, int *, int *, int *, int *, int, bool *);
+void DrawCard(int cardStack[], int * stackTopCard, int numOfDecks, 
+    int playerHand[], int * numCardsInHand);
+int WhosNext(int playerState[], int currentPlayer);
+void BlackJack(int * playerState);
+void Bust(int * playerState, int * playerMoney, int betMoney);
+bool NewGame(
+		int cardStack[], int * stackTopCard, int numOfDecks, 
+        int playerCards[][MAX_CARD_HAND], int posPlayerHand[],
+        int * currentPlayer, int playerScore[], int playerState[],
+        int houseCards[], int * posHouseHand);
+bool Stand(int playerState[], int * currentPlayer);
+bool Hit(
+	int cardStack[], int * stackTopCard, int numOfDecks, 
+    int playerCards[][MAX_CARD_HAND], int posPlayerHand[], int playerScore[], 
+    int * currentPlayer, int playerState[], int playerMoney[], int betMoney);
+void HouseTurn(
+        int cardStack[], int * stackTopCard, int numOfDecks, 
+        int houseCards[], int * posHouseHand, int * houseScore, 
+        int posPlayerHand[], int playerScore[], int playerMoney[], 
+        int playerState[], int playerStats[MAX_PLAYERS][4], 
+        int betMoney, int startPlayerMoney);
+
 
 //utility function declarations
-void GameInit(int *, int*, int *, int *, int *, int *, bool *);
+void GameInit(int cardStack[], int * stackTopCard, 
+        int * numOfDecks, int * startPlayerMoney, int * betMoney, 
+        int playerMoney[], int playerState[]);
 void GetGameParameters(int *, int *, int *);
 int ReadParameter(int , int);
+
 
 // definition of some strings: they cannot be changed when the program is executed !
 const char myName[] = "André Agostinho";
@@ -81,7 +111,7 @@ int main( int argc, char* args[] )
     TTF_Font *serif = NULL;
     SDL_Surface *cards[DECK_SIZE+1], *imgs[2];
     SDL_Event event;
-    int delay = 500;
+    int delay = 300;
     int quit = 0;
 
     //game variables
@@ -89,68 +119,67 @@ int main( int argc, char* args[] )
     bool houseHasPlayed = false;
 
     int currentPlayer = 0;
-    bool isPlaying[MAX_PLAYERS] = {false};
+    int playerState[MAX_PLAYERS] = {0};
     int playerMoney[MAX_PLAYERS] = {0};
     int playerScore[MAX_PLAYERS] = {0};
+    int playerStats [MAX_PLAYERS][STATS] = {0};
     int houseScore = 0;
 
-	int playerCards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
+    int cardStack[DECK_SIZE * MAX_NUM_DECKS] = {0};
+    int stackTopCard = 0;
+    int playerCards[MAX_PLAYERS][MAX_CARD_HAND] = {{0}};
     int posPlayerHand[MAX_PLAYERS] = {0};
     int houseCards[MAX_CARD_HAND] = {0};
     int posHouseHand = 0;
     
-    int cardStack[DECK_SIZE * MAX_NUM_DECKS] = {0};
-    int stackTopCard = 0;
+   
     
     //game parameters
     int numberOfDecks = 0;
     int startingPlayerMoney = 0;
     int betMoney = 0;
 
-    playerCards[0][0] = 4;
-
     printf("Init game\n");
     // initialize game mechanics
-    GameInit(cardStack, &stackTopCard, &numberOfDecks, &startingPlayerMoney, &betMoney, playerMoney, isPlaying);
+    GameInit(cardStack, &stackTopCard, &numberOfDecks, &startingPlayerMoney, &betMoney, playerMoney, playerState);
     printf("Inited game\n");
-	// initialize graphics
-	InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
+    // initialize graphics
+    InitEverything(WIDTH_WINDOW, HEIGHT_WINDOW, &serif, imgs, &window, &renderer);
     // loads the cards images
     LoadCards(cards);
     
     printf("New game\n");
     NewGame(cardStack, &stackTopCard, numberOfDecks, playerCards, 
-        posPlayerHand, houseCards, &posHouseHand, &currentPlayer, 
-        playerScore, isPlaying);
+        posPlayerHand, &currentPlayer, playerScore, playerState, 
+        houseCards, &posHouseHand);
     printf("New game set\n");
-	
- 	while( quit == 0 )
+    while( quit == 0 )
     {
         // while there's events to handle
         while( SDL_PollEvent( &event ) )
         {
             // quit the program by pressing the cross
-			if( event.type == SDL_QUIT )
+            if( event.type == SDL_QUIT )
             {
                 quit = 1;
             }
-			else if ( event.type == SDL_KEYDOWN )
-			{
-				switch ( event.key.keysym.sym )
-				{
+            else if ( event.type == SDL_KEYDOWN )
+            {
+                switch ( event.key.keysym.sym )
+                {
                     // press 's' to "stand"
-					case SDLK_s:
+                    case SDLK_s:
                         printf("Pressed s\n");
-                        if (!gameHasEnded) gameHasEnded = Stand(isPlaying, &currentPlayer);
+                        if (!gameHasEnded) gameHasEnded = Stand(playerState, &currentPlayer);
                         break;
 
                     // press 'h' to "hit"
-					case SDLK_h:
+                    case SDLK_h:
                         printf("Pressed h\n");
                         if (!gameHasEnded) {
                             gameHasEnded = Hit(cardStack, &stackTopCard, 
                                 numberOfDecks, playerCards, posPlayerHand, 
-                                playerScore, &currentPlayer, isPlaying, 
+                                playerScore, &currentPlayer, playerState, 
                                 playerMoney, betMoney);
                          }
                         break;
@@ -163,8 +192,8 @@ int main( int argc, char* args[] )
                             gameHasEnded = false;
                             houseHasPlayed = false;
                             gameHasEnded = NewGame(cardStack, &stackTopCard, numberOfDecks, 
-                                playerCards, posPlayerHand, houseCards, 
-                                &posHouseHand, &currentPlayer, playerScore, isPlaying);
+                            	playerCards, posPlayerHand, &currentPlayer, playerScore, 
+                            	playerState, houseCards, &posHouseHand);
                         }
                         break;
 
@@ -174,23 +203,25 @@ int main( int argc, char* args[] )
                         quit = 1;
                         break;
 
-					default:
-						break;
-				}
+                    default:
+                        break;
+                }
 
                 printf("Scores\n");
                 for (int i = 0; i < MAX_PLAYERS; i++){
                     printf("Player %d: %d\n", i+1, playerScore[i]);
                 }
 
-			}
+            }
         }
         if (gameHasEnded && !houseHasPlayed){
             printf("casa jogou\n");
-            currentPlayer = -1;
+            currentPlayer = -1; // no red rectangle around any player
+
             HouseTurn(cardStack, &stackTopCard, numberOfDecks, houseCards,
-                &posHouseHand, &houseScore, playerScore, playerMoney,
-                betMoney, isPlaying);
+                &posHouseHand, &houseScore, posPlayerHand, playerScore, playerMoney, 
+                playerState, playerStats, betMoney, startingPlayerMoney);
+
             houseHasPlayed = true;
             
         }
@@ -200,24 +231,26 @@ int main( int argc, char* args[] )
         // render game table
         RenderTable(playerMoney, serif, imgs, renderer, currentPlayer);
         // render house cards
-        RenderHouseCards(houseCards, posHouseHand, cards, renderer);
+        RenderHouseCards(houseCards, posHouseHand, cards, renderer, gameHasEnded);
         // render player cards
         RenderPlayerCards(playerCards, posPlayerHand, cards, renderer);
         // render in the screen all changes above
         SDL_RenderPresent(renderer);
-    	// add a delay
-		SDL_Delay( delay );
+        // add a delay
+        SDL_Delay( delay );
     }
 
+    // log stats
+    logStats(playerStats, playerNames);
     // free memory allocated for images and textures and close everything including fonts
     UnLoadCards(cards);
     TTF_CloseFont(serif);
     SDL_FreeSurface(imgs[0]);
     SDL_FreeSurface(imgs[1]);
     SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
-	return EXIT_SUCCESS;
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return EXIT_SUCCESS;
 }
 
 
@@ -237,14 +270,14 @@ int main( int argc, char* args[] )
  *                                  money
  * @param[out]    betMoney          ptr to game parameter: bet money
  * @param[in,out] playerMoney       ptr to player money array
- * @param[out]    isPlaying         ptr to array with players still in game
+ * @param[out]    playerState         ptr to array with players still in game
  *
  * Displays a welcome message to the user, asks for the game parameters
  * (number of decks to be used, amount of money with which each player starts
  * and the bet each player makes each game) and stores them in *numOfDecks,
  * *startPlayerMoney and *betMoney.
  *
- * Initializes playerMoney array with *startPlayerMoney and sets all isPlaying
+ * Initializes playerMoney array with *startPlayerMoney and sets all playerState
  * index to true.
  *
  * Seeds the pseudo-random number generator, initializes the card stack
@@ -253,8 +286,9 @@ int main( int argc, char* args[] )
  * Prints a message warning the game is starting.
  */
 void GameInit(
-        int * cardStack, int* stackTopCard, int * numOfDecks, int * startPlayerMoney, 
-        int * betMoney, int * playerMoney, bool * isPlaying)
+        int cardStack[], int * stackTopCard, 
+        int * numOfDecks, int * startPlayerMoney, int * betMoney, 
+        int playerMoney[], int playerState[])
 {
     printf(
         "\n"
@@ -273,10 +307,10 @@ void GameInit(
 
     for (int i = 0; i < MAX_PLAYERS; i ++){
         playerMoney[i] = *startPlayerMoney;
-        isPlaying[i] = true;
+        playerState[i] = NORMAL;
     }
 
-    srand(time(NULL));
+    srand(456);
 
     GenerateDecks(cardStack, *numOfDecks);
 
@@ -328,6 +362,7 @@ int ReadParameter(int minValue, int maxValue){
     bool isValid = false;
     char buffer[15] = "\0";
     char * testPtr = NULL;
+
     while(!isValid){
         char *rv = fgets(buffer, 15, stdin);
         if(rv == NULL){
@@ -365,7 +400,7 @@ int ReadParameter(int minValue, int maxValue){
  * Initializes the card stack pointed by cardStack with the number of decks
  * pointed by numOfDecks.
  */
-void GenerateDecks(int * cardStack, int numOfDecks){
+void GenerateDecks(int cardStack[], int numOfDecks){
     for (int i = 0; i < numOfDecks; i++){
         for (int j = 0; j < DECK_SIZE; j++){
             cardStack[i * DECK_SIZE + j] = j;
@@ -382,7 +417,7 @@ void GenerateDecks(int * cardStack, int numOfDecks){
  *
  * Shuffles the card stack pointed by cardStack using Fisher-Yates algorithm
  */
-void Shuffle(int * cardStack, int * stackTopCard, int numOfDecks){
+void Shuffle(int cardStack[], int * stackTopCard, int numOfDecks){
     for (int i = numOfDecks * DECK_SIZE - 1; i >= 1; i--){
         int j, aux; 
         j = rand() % i;
@@ -401,7 +436,7 @@ void Shuffle(int * cardStack, int * stackTopCard, int numOfDecks){
  *
  * @return     the number of points in the player's (or house) hand
  */
-int CountScore(int * playerHand, int numCardsInHand){
+int CountScore(int playerHand[], int numCardsInHand){
 
     int playerScore = 0, numOfAces = 0;
     for (int i = 0; i < numCardsInHand; i++){
@@ -459,41 +494,20 @@ int CardPoints(int cardRank){
  * Invokes DrawCard to assign a card to playerHand[*numCardsInHand] and
  * increments *numCardsInHand.
  */
-void HandCardToPlayer(  int * cardStack, int * stackTopCard, int numOfDecks,
-                        int * playerHand, int * numCardsInHand)
-{
-    playerHand[*numCardsInHand] = DrawCard(cardStack, stackTopCard, numOfDecks);
+void DrawCard(int cardStack[], int * stackTopCard, int numOfDecks, 
+    int playerHand[], int * numCardsInHand){
+
+    playerHand[*numCardsInHand] = cardStack[*stackTopCard];
     *numCardsInHand += 1;
-}
-
-
-/**
- * @brief         Draws a card from the card stack
- *
- * @param[in]     cardStack     ptr to the card stack array
- * @param[in,out] stackTopCard  ptr to position of the top card in the stack
- * @param[in]     numOfDecks    number of decks used
- *
- * @return        the id of the drawn card (stack's top card)
- *
- * Returns cardStack[*stackTopCard] and increments *stackTopCard.
- *
- * If the card returned was the last card of the stack then it shuffles
- * cardStack and resets *stackTopCard.
- */
-int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
-    int drawnCard;
-    drawnCard = cardStack[*stackTopCard];
-
     *stackTopCard += 1;
 
+    // check if it was the last card on the card stack
     if (*stackTopCard == numOfDecks * DECK_SIZE){
         Shuffle (cardStack, stackTopCard, numOfDecks);
         *stackTopCard = 0;
     }
-
-    return drawnCard;
 }
+
 
 /**
  * @brief         Starts a new game, handing the first two cards to each
@@ -508,7 +522,7 @@ int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
  * @param[in,out] posHouseHand   ptr to number of cards in house hand
  * @param[in,out] currentPlayer  ptr to current player number
  * @param[out]    playerScore    ptr to array of player scores
- * @param[in,out] isPlaying      ptr to array with players still in game
+ * @param[in,out] playerState      ptr to array with players still in game
  *
  * @return        true if the game is over, false otherwise
  *
@@ -519,41 +533,52 @@ int DrawCard(int * cardStack, int * stackTopCard, int numOfDecks){
  * players have a BlackJack and false otherwise.
  */
 bool NewGame(
-        int * cardStack, int * stackTopCard, int numOfDecks, 
-        int playerCards[][MAX_CARD_HAND], int * posPlayerHand, 
-        int * houseCards, int * posHouseHand, 
-        int * currentPlayer, int * playerScore, bool * isPlaying)
+        int cardStack[], int * stackTopCard, int numOfDecks, 
+        int playerCards[][MAX_CARD_HAND], int posPlayerHand[],
+        int * currentPlayer, int playerScore[], int playerState[],
+        int houseCards[], int * posHouseHand)
 {
- 
+
     *currentPlayer = 0;
 
     // reset everyone's hands
+    // put everyone in the game except broke players
     for (int i = 0; i < MAX_PLAYERS; i++){
-        posPlayerHand[i] = 0;        
+        posPlayerHand[i] = 0;
+        if (playerState[i] != BROKE) playerState[i] = NORMAL;
     }
     *posHouseHand = 0;
+
+    
 
     // hand initial cards
     for (int i = 0; i < 2; i++){
         for (int j = 0; j < MAX_PLAYERS; j++){
-            HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
-                playerCards[j], &posPlayerHand[j]);
+            if (playerState[j] != BROKE){
+                // hand card to player
+                DrawCard(cardStack, stackTopCard, numOfDecks, 
+                    playerCards[j], &posPlayerHand[j]);    
+            }
         }
-        HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
+        // hand card to house
+        DrawCard(cardStack, stackTopCard, numOfDecks, 
             houseCards, posHouseHand);
     }
 
-    // search for BlackJacks
+    // search for BlackJacks and broke players to pass the turn to the first valid player
     for (int i = 0; i < MAX_PLAYERS; i++){
         playerScore[i] = CountScore(playerCards[i], posPlayerHand[i]);
         printf("Player %d: %d\n", i +1, playerScore[i]);
         if (playerScore[i] == 21){
-            BlackJack(&isPlaying[i]);
-            *currentPlayer += 1;
+            BlackJack(&playerState[i]);
         }
+        if (playerState[i] != NORMAL){
+        	*currentPlayer += 1;
+        }
+        
     }
 
-    // end the game if all the players have a BlackJack
+    // end the game if no players are valid to play
     if(*currentPlayer == MAX_PLAYERS){
         return true;
     } else {
@@ -574,7 +599,7 @@ bool NewGame(
  *                               hands
  * @param[in,out] playerScore    ptr to array of players scores
  * @param[in,out] currentPlayer  ptr to player currently playing
- * @param[in,out] isPlaying      ptr to array with players still in play
+ * @param[in,out] playerState      ptr to array with players still in play
  * @param         playerMoney    ptr to array with players money
  *
  * @return        true if the game is over, false otherwise
@@ -584,23 +609,24 @@ bool NewGame(
  * to the next player or returns true if there is no other player to play.
  */
 bool Hit(
-    int * cardStack, int * stackTopCard, int numOfDecks, int playerCards[][MAX_CARD_HAND], 
-    int * posPlayerHand, int * playerScore, int * currentPlayer, 
-    bool * isPlaying, int * playerMoney, int betMoney)
+    int cardStack[], int * stackTopCard, int numOfDecks, 
+    int playerCards[][MAX_CARD_HAND], int posPlayerHand[], int playerScore[], 
+    int * currentPlayer, int playerState[], int playerMoney[], int betMoney)
 {
     int nextPlayer;
 
-    HandCardToPlayer(cardStack, stackTopCard, numOfDecks, 
+    DrawCard(cardStack, stackTopCard, numOfDecks, 
         playerCards[*currentPlayer], &posPlayerHand[*currentPlayer]);
 
     // check for bust or BlackJack
     playerScore[*currentPlayer] = CountScore(playerCards[*currentPlayer], posPlayerHand[*currentPlayer]);
 
     if (playerScore[*currentPlayer] >= 21){
-        if (playerScore[*currentPlayer] > 21) Bust(&isPlaying[*currentPlayer], &playerMoney[*currentPlayer], betMoney);
-        else BlackJack(&isPlaying[*currentPlayer]);
+        if (playerScore[*currentPlayer] > 21){
+            Bust(&playerState[*currentPlayer], &playerMoney[*currentPlayer], betMoney);
+        } else BlackJack(&playerState[*currentPlayer]);
 
-        nextPlayer = WhosNext(isPlaying, *currentPlayer);
+        nextPlayer = WhosNext(playerState, *currentPlayer);
 
         // end the game if there is no other player to play
         if (nextPlayer == -1){
@@ -618,15 +644,15 @@ bool Hit(
 /**
  * @brief      "Stand" Function. Passes the turn to next player
  *
- * @param      isPlaying      ptr to array with players still in play
+ * @param      playerState      ptr to array with players still in play
  * @param      currentPlayer  ptr to player currently playing
  *
  * @return     true if the game is over, false otherwise
  */
-bool Stand(bool * isPlaying, int * currentPlayer){
+bool Stand(int playerState[], int * currentPlayer){
     int nextPlayer;
 
-    nextPlayer = WhosNext(isPlaying, *currentPlayer);
+    nextPlayer = WhosNext(playerState, *currentPlayer);
 
     // end the game if there is no other player to play
     if (nextPlayer == -1){
@@ -638,13 +664,13 @@ bool Stand(bool * isPlaying, int * currentPlayer){
 }
 
 
-void Bust(bool * isPlaying, int * playerMoney, int betMoney){
-    *isPlaying = false;
+void Bust(int * playerState, int * playerMoney, int betMoney){
+    *playerState = BUSTED;
     *playerMoney -= betMoney;
 }
 
-void BlackJack(bool * isPlaying){
-    *isPlaying = false;
+void BlackJack(int * playerState){
+    *playerState = BLACKJACK;
 }
 
 
@@ -652,31 +678,35 @@ void BlackJack(bool * isPlaying){
  * @brief      Picks the next player which is still in play and flags if there
  *             is no player left to play
  *
- * @param      isPlaying      ptr to array with players still in play
+ * @param      playerState      ptr to array with players still in play
  * @param[in]  currentPlayer  ptr to the player currently playing
  *
  * @return     number of the next player if there is a valid player, -1 if
  *             there is no player left
  */
-int WhosNext(bool * isPlaying, int currentPlayer){
+int WhosNext(int playerState[], int currentPlayer){
     for (int i = currentPlayer; i < MAX_PLAYERS; i++){
 
         if (i == MAX_PLAYERS - 1){
             return (-1); // no player left to play
-        } else if (isPlaying[i + 1]){
+        } else if (playerState[i + 1] == NORMAL){
             return (i + 1); // next player
         }
     }
 }
 
 void HouseTurn(
-        int * cardStack, int * stackTopCard, int numOfDecks, int * houseCards,
-        int * posHouseHand, int * houseScore, int * playerScore, 
-        int * playerMoney, int betMoney, bool * isPlaying)
+        int cardStack[], int * stackTopCard, int numOfDecks, 
+        int houseCards[], int * posHouseHand, int * houseScore, 
+        int posPlayerHand[], int playerScore[], int playerMoney[], 
+        int playerState[], int playerStats[MAX_PLAYERS][STATS], 
+        int betMoney, int startPlayerMoney)
 {
     bool houseFinished = false;
     bool houseBusted = false;
+
     printf("house playing\n");
+
     // take cards till more than 17 points and no soft hand
     while(!houseFinished){
         *houseScore = CountScore(houseCards, *posHouseHand);
@@ -700,38 +730,80 @@ void HouseTurn(
 
         if (!houseFinished) {
             printf("carta para a casa\n");
-            HandCardToPlayer(cardStack, stackTopCard, numOfDecks, houseCards, 
+            DrawCard(cardStack, stackTopCard, numOfDecks, houseCards, 
                 posHouseHand);
         }
+        SDL_Delay(200);
     }
 
-    // check win, loss or draw (nothing is done)
+    // check win, loss or draw
     for (int i = 0; i < MAX_PLAYERS; i++){
-        printf("Player %d score: %d\n", i +1, playerScore[i]);
-        if (playerScore[i] > 21) { // busted
-            // bet money took already when busted
-            printf("Player %d busted\n", i + 1);
-            
-        } else if (playerScore[i] > *houseScore || houseBusted) { // won
-            playerMoney[i] += betMoney;
-            printf("Player %d won\n", i + 1);
-        } else if (playerScore[i] < *houseScore) { // lost
-            playerMoney[i] -= betMoney;
-            printf("Player %d lost\n", i + 1);
-        }
+        if (playerState[i] != BROKE){
 
-        // check if the player is broke and check him to lay otherwise
-        if (playerMoney[i] < betMoney){
-            isPlaying[i] = false;
-        } else {
-            isPlaying[i] = true;
+                printf("Player %d score: %d\n", i +1, playerScore[i]);
+            if (playerScore[i] > 21) { // busted
+                playerStats[i][LOSS] += 1;
+                // bet money took already when busted
+                printf("Player %d busted\n", i + 1);
+                
+            } else if (playerScore[i] == 21 && posPlayerHand[i] == 2 && *houseScore != 21) { //blackjack
+                playerMoney[i] += 1.5f * betMoney;
+                playerStats[i][WIN] += 1;
+                printf("Player %d won with a blackjack\n", i + 1);
+
+            } else if (playerScore[i] > *houseScore || houseBusted) { // won
+                playerMoney[i] += betMoney;
+                playerStats[i][WIN] += 1;
+                printf("Player %d won\n", i + 1);
+
+            } else if (playerScore[i] < *houseScore) { // lost
+                playerMoney[i] -= betMoney;
+                playerStats[i][LOSS] += 1;
+                printf("Player %d lost\n", i + 1);
+
+            } else { // draw
+                playerStats[i][DRAW] += 1;
+                printf("Player %d drawn\n", i + 1);
+            }
+
+            // check if the player is broke
+            if (playerMoney[i] < betMoney){
+                playerState[i] = BROKE;
+            } else {
+                // retain last state
+            }
+
+            // calculate money house won or lost with each player
+            playerStats[i][BALANCE] = startPlayerMoney - playerMoney[i];
         }
+        
     }
 
 }
 
 
+void logStats (int playerStats[MAX_PLAYERS][STATS], const char * playerNames[]){
+    FILE *statsLog;
+    statsLog = fopen("stats.log", "w");
+    if (statsLog == NULL){
+        printf("Couldn't open stats file. No stats logged\n");
+    }
 
+    int check;
+    check = fprintf(statsLog, "Player Name \t Wins \t Draws \t Loses \t House Balance\n");
+    if (check == 0){
+        printf("Couldn't write to stats file");
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++){
+        check = fprintf(statsLog, "%s \t %d \t %d\t %d \t %d \n", playerNames[i], 
+            playerStats[i][WIN], playerStats[i][DRAW], playerStats[i][LOSS], playerStats[i][BALANCE]);
+        if (check == 0){
+            printf("Couldn't write to stats file");
+        }
+    }
+    fclose(statsLog);
+}
 
 
 
@@ -830,7 +902,7 @@ void RenderTable(int _money[], TTF_Font *_font, SDL_Surface *_img[], SDL_Rendere
  * \param _cards vector with all loaded card images
  * \param _renderer renderer to handle all rendering in a window
  */
-void RenderHouseCards(int _house[], int _pos_house_hand, SDL_Surface **_cards, SDL_Renderer* _renderer, bool houseHasPlayed)
+void RenderHouseCards(int _house[], int _pos_house_hand, SDL_Surface **_cards, SDL_Renderer* _renderer, bool gameHasEnded)
 {
     int card, x, y;
     int div = WIDTH_WINDOW/CARD_WIDTH;
@@ -838,24 +910,23 @@ void RenderHouseCards(int _house[], int _pos_house_hand, SDL_Surface **_cards, S
     // drawing all house cards
     for ( card = 0; card < _pos_house_hand; card++)
     {
-        // calculate its position
-        x = (div/2-_pos_house_hand/2+card)*CARD_WIDTH + 15;
-        y = (int) (0.26f*HEIGHT_WINDOW);
-        // render it !
-        RenderCard(x, y, _house[card], _cards, _renderer);
+        // players still playing ? draw a card face down
+        if (card == 0 && !gameHasEnded)
+        {
+            x = (div/2-_pos_house_hand/2+card)*CARD_WIDTH + 15;
+            y = (int) (0.26f*HEIGHT_WINDOW);
+            RenderCard(x, y, DECK_SIZE, _cards, _renderer);
+        } else {
+            // calculate its position
+            x = (div/2-_pos_house_hand/2+card)*CARD_WIDTH + 15;
+            y = (int) (0.26f*HEIGHT_WINDOW);
+            // render it !
+            RenderCard(x, y, _house[card], _cards, _renderer);
+        }
+        
     }
-    // just one card ?: draw a card face down
-    if (_pos_house_hand == 1)
-    {
-        x = (div/2-_pos_house_hand/2+1)*CARD_WIDTH + 15;
-        y = (int) (0.26f*HEIGHT_WINDOW);
-        RenderCif (_pos_house_hand == 1)
-    {
-        x = (div/2-_pos_house_hand/2+1)*CARD_WIDTH + 15;
-        y = (int) (0.26f*HEIGHT_WINDOW);
-        RenderCard(x, y, DECK_SIZE, _cards, _renderer);
-    }ard(x, y, DECK_SIZE, _cards, _renderer);
-    }
+    
+    
 }
 
 /**
@@ -968,22 +1039,22 @@ void UnLoadCards(SDL_Surface **_array_of_cards)
  */
 int RenderLogo(int x, int y, SDL_Surface *_logoIST, SDL_Renderer* _renderer)
 {
-	SDL_Texture *text_IST;
-	SDL_Rect boardPos;
+    SDL_Texture *text_IST;
+    SDL_Rect boardPos;
     
     // space occupied by the logo
-	boardPos.x = x;
-	boardPos.y = y;
-	boardPos.w = _logoIST->w;
-	boardPos.h = _logoIST->h;
+    boardPos.x = x;
+    boardPos.y = y;
+    boardPos.w = _logoIST->w;
+    boardPos.h = _logoIST->h;
 
     // render it 
-	text_IST = SDL_CreateTextureFromSurface(_renderer, _logoIST);
-	SDL_RenderCopy(_renderer, text_IST, NULL, &boardPos);
+    text_IST = SDL_CreateTextureFromSurface(_renderer, _logoIST);
+    SDL_RenderCopy(_renderer, text_IST, NULL, &boardPos);
 
     // destroy associated texture !
-	SDL_DestroyTexture(text_IST);
-	return _logoIST->h;
+    SDL_DestroyTexture(text_IST);
+    return _logoIST->h;
 }
 
 /**
@@ -996,29 +1067,29 @@ int RenderLogo(int x, int y, SDL_Surface *_logoIST, SDL_Renderer* _renderer)
  */
 int RenderText(int x, int y, const char *text, TTF_Font *_font, SDL_Color *_color, SDL_Renderer* _renderer)
 {
-	SDL_Surface *text_surface;
-	SDL_Texture *text_texture;
-	SDL_Rect solidRect;
+    SDL_Surface *text_surface;
+    SDL_Texture *text_texture;
+    SDL_Rect solidRect;
 
-	solidRect.x = x;
-	solidRect.y = y;
+    solidRect.x = x;
+    solidRect.y = y;
     // create a surface from the string text with a predefined font
-	text_surface = TTF_RenderText_Blended(_font,text,*_color);
-	if(!text_surface)
-	{
-	    printf("TTF_RenderText_Blended: %s\n", TTF_GetError());
-	    exit(EXIT_FAILURE);
-	}
+    text_surface = TTF_RenderText_Blended(_font,text,*_color);
+    if(!text_surface)
+    {
+        printf("TTF_RenderText_Blended: %s\n", TTF_GetError());
+        exit(EXIT_FAILURE);
+    }
     // create texture
-	text_texture = SDL_CreateTextureFromSurface(_renderer, text_surface);
+    text_texture = SDL_CreateTextureFromSurface(_renderer, text_surface);
     // obtain size
-	SDL_QueryTexture( text_texture, NULL, NULL, &solidRect.w, &solidRect.h );
+    SDL_QueryTexture( text_texture, NULL, NULL, &solidRect.w, &solidRect.h );
     // render it !
-	SDL_RenderCopy(_renderer, text_texture, NULL, &solidRect);
+    SDL_RenderCopy(_renderer, text_texture, NULL, &solidRect);
 
-	SDL_DestroyTexture(text_texture);
-	SDL_FreeSurface(text_surface);
-	return solidRect.h;
+    SDL_DestroyTexture(text_texture);
+    SDL_FreeSurface(text_surface);
+    return solidRect.h;
 }
 
 /**
@@ -1066,11 +1137,11 @@ void InitEverything(int width, int height, TTF_Font **_font, SDL_Surface *_img[]
 void InitSDL()
 {
     // init SDL library
-	if ( SDL_Init( SDL_INIT_EVERYTHING ) == -1 )
-	{
-		printf(" Failed to initialize SDL : %s\n", SDL_GetError());
+    if ( SDL_Init( SDL_INIT_EVERYTHING ) == -1 )
+    {
+        printf(" Failed to initialize SDL : %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
-	}
+    }
 }
 
 /**
@@ -1078,12 +1149,12 @@ void InitSDL()
  */
 void InitFont()
 {
-	// Init font library
-	if(TTF_Init()==-1)
-	{
-	    printf("TTF_Init: %s\n", TTF_GetError());
+    // Init font library
+    if(TTF_Init()==-1)
+    {
+        printf("TTF_Init: %s\n", TTF_GetError());
         exit(EXIT_FAILURE);
-	}
+    }
 }
 
 /**
@@ -1096,14 +1167,14 @@ SDL_Window* CreateWindow(int width, int height)
 {
     SDL_Window *window;
     // init window
-	window = SDL_CreateWindow( "BlackJack", WINDOW_POSX, WINDOW_POSY, width+EXTRASPACE, height, 0 );
+    window = SDL_CreateWindow( "BlackJack", WINDOW_POSX, WINDOW_POSY, width+EXTRASPACE, height, 0 );
     // check for error !
-	if ( window == NULL )
-	{
-		printf("Failed to create window : %s\n", SDL_GetError());
-		exit(EXIT_FAILURE);
-	}
-	return window;
+    if ( window == NULL )
+    {
+        printf("Failed to create window : %s\n", SDL_GetError());
+        exit(EXIT_FAILURE);
+    }
+    return window;
 }
 
 /**
@@ -1117,16 +1188,16 @@ SDL_Renderer* CreateRenderer(int width, int height, SDL_Window *_window)
 {
     SDL_Renderer *renderer;
     // init renderer
-	renderer = SDL_CreateRenderer( _window, -1, 0 );
+    renderer = SDL_CreateRenderer( _window, -1, 0 );
 
-	if ( renderer == NULL )
-	{
-		printf("Failed to create renderer : %s", SDL_GetError());
+    if ( renderer == NULL )
+    {
+        printf("Failed to create renderer : %s", SDL_GetError());
         exit(EXIT_FAILURE);
-	}
+    }
 
-	// set size of renderer to the same as window
-	SDL_RenderSetLogicalSize( renderer, width+EXTRASPACE, height );
+    // set size of renderer to the same as window
+    SDL_RenderSetLogicalSize( renderer, width+EXTRASPACE, height );
 
-	return renderer;
+    return renderer;
 }
