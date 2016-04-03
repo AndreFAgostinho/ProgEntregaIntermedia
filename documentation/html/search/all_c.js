@@ -1,6 +1,8 @@
 var searchData=
 [
-  ['width_5fwindow',['WIDTH_WINDOW',['../_black_jack_g_u_i_8c.html#a7ca678151fe9c95fb6d8859dedd1f106',1,'BlackJackGUI.c']]],
-  ['window_5fposx',['WINDOW_POSX',['../_black_jack_g_u_i_8c.html#ad33a712eed5cf912db52f22ee9bb2e64',1,'BlackJackGUI.c']]],
-  ['window_5fposy',['WINDOW_POSY',['../_black_jack_g_u_i_8c.html#a85502120f7477d1c5d5465b0e19ba6cf',1,'BlackJackGUI.c']]]
+  ['shuffle',['Shuffle',['../_black_jack_g_u_i_8c.html#a76b50c6082adebadb87c0646642e3ced',1,'Shuffle(int *, int *, int):&#160;BlackJackGUI.c'],['../_black_jack_g_u_i_8c.html#aaf2492e38e8d7c886d92e8eead9c76df',1,'Shuffle(int cardStack[], int *stackTopCard, int numOfDecks):&#160;BlackJackGUI.c']]],
+  ['stand',['Stand',['../_black_jack_g_u_i_8c.html#adcdd1537798ae967dc70d65198c84609',1,'BlackJackGUI.c']]],
+  ['states',['STATES',['../_black_jack_g_u_i_8c.html#ab09b5cfbb756f1b30c59bf321716fd2e',1,'BlackJackGUI.c']]],
+  ['stats',['STATS',['../_black_jack_g_u_i_8c.html#ad56ac02048a828d5401f884bbbe846ab',1,'BlackJackGUI.c']]],
+  ['string_5fsize',['STRING_SIZE',['../_black_jack_g_u_i_8c.html#ad78224efe1d3fb39b67ca74ad9d9eec7',1,'BlackJackGUI.c']]]
 ];

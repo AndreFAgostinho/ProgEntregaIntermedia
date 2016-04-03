@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['initeverything',['InitEverything',['../_black_jack_g_u_i_8c.html#af3aea359d13af2d0ed31344db4634523',1,'InitEverything(int, int, TTF_Font **, SDL_Surface **, SDL_Window **, SDL_Renderer **):&#160;BlackJackGUI.c'],['../_black_jack_g_u_i_8c.html#a948f829f98da189f8cc504328f34e753',1,'InitEverything(int width, int height, TTF_Font **_font, SDL_Surface *_img[], SDL_Window **_window, SDL_Renderer **_renderer):&#160;BlackJackGUI.c']]],
-  ['initfont',['InitFont',['../_black_jack_g_u_i_8c.html#aa733016de053db0b488556fe03dd97f4',1,'BlackJackGUI.c']]],
-  ['initsdl',['InitSDL',['../_black_jack_g_u_i_8c.html#a58fa06ae01661a5410e391dc52262877',1,'BlackJackGUI.c']]]
+  ['height_5fwindow',['HEIGHT_WINDOW',['../_black_jack_g_u_i_8c.html#add79f2cc24b761dad678c8927532e607',1,'BlackJackGUI.c']]],
+  ['hit',['Hit',['../_black_jack_g_u_i_8c.html#ade224a5ab137faeb2bcae0e32e22cf66',1,'BlackJackGUI.c']]],
+  ['houseturn',['HouseTurn',['../_black_jack_g_u_i_8c.html#a7313cf1a87fa9e9ffb82eebf01e239ba',1,'HouseTurn(int[], int *, int, int[], int *, int *, int[], int[], int[], int[], int[MAX_PLAYERS][4], int, int):&#160;BlackJackGUI.c'],['../_black_jack_g_u_i_8c.html#abddfc0a8f1e6f93299faaa7a0778101b',1,'HouseTurn(int cardStack[], int *stackTopCard, int numOfDecks, int houseCards[], int *posHouseHand, int *houseScore, int posPlayerHand[], int playerScore[], int playerMoney[], int playerState[], int playerStats[MAX_PLAYERS][STATS], int betMoney, int startPlayerMoney):&#160;BlackJackGUI.c']]]
 ];

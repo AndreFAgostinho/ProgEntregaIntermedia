@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['height_5fwindow',['HEIGHT_WINDOW',['../_black_jack_g_u_i_8c.html#add79f2cc24b761dad678c8927532e607',1,'BlackJackGUI.c']]]
+  ['deck_5fsize',['DECK_SIZE',['../_black_jack_g_u_i_8c.html#ab48a679225d82ec51e09e62d14313b34',1,'BlackJackGUI.c']]],
+  ['draws',['DRAWS',['../_black_jack_g_u_i_8c.html#aacf4ef5af6e8737c73e4c9ab3d39c54b',1,'BlackJackGUI.c']]]
 ];

@@ -1,6 +1,6 @@
 var NAVTREE =
 [
-  [ "BlackJack", "index.html", [
+  [ "Blackjack", "index.html", [
     [ "Files", null, [
       [ "File List", "files.html", "files" ],
       [ "Globals", "globals.html", [
